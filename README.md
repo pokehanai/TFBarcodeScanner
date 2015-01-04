@@ -23,8 +23,10 @@ then add the TFBarcodeScanner static library in your project's Build Phases.
 
 1. Create a view controller that is subclassed from `TFBarcodeScannerViewController`.
    Make sure that your subviews have a transparent region so the preview is visible.
-1. In your `viewDidLoad` method, optionally set the `barcodeTypes` bit flag to whatever
-   barcode types you want to scan.
+1. Override the `barcodeSetUp` method to initalize scanner related valiables.
+1. Optionally set the `barcodeTypes` bit flag to whatever barcode types you want to scan.
+1. Optionally put a `UIView` in the view controller and set it to the `previewContainer`.
+   The preview camera view will be drawn in the area.
 1. Override the `barcodeWasScanned` method. This returns a set of barcodes that were
    recognized. You normally will call `stop` once a suitable barcode is recognized.
 1. If you have UI elements that you want to overlay on top of the scanning preview,

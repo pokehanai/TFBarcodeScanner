@@ -58,6 +58,25 @@ typedef enum {
 @interface TFBarcodeScannerViewController : UIViewController <AVCaptureMetadataOutputObjectsDelegate>
 
 /**
+ * Set a UIView object as a container of the preview camera view.
+ * If it is nil, the root view of this ViewController will be used.
+ */
+@property (weak, nonatomic) IBOutlet UIView *previewContainer;
+
+/*!
+ @property rectOfPreviewInterest
+ @abstract
+	Specifies a rectangle of interest for limiting the search area for visual metadata.
+
+ @discussion
+	The value of this property is a CGRect that determines the receiver's rectangle of interest for each frame of video.
+	The rectangle's origin is top left and is relative to the coordinate space of the device providing the metadata.  Specifying
+	a rectOfInterest may improve detection performance for certain types of metadata. The default value of this property is the
+	value CGRectMake(0, 0, 1, 1).  Metadata objects whose bounds do not intersect with the rectOfInterest will not be returned.
+ */
+@property(nonatomic) CGRect rectOfPreviewInterest;
+
+/**
  *  A bit flag of TFBarcodeTypes. Only barcodes of these types will be returned by the
  *  scanner. If you don't specify any barcode types, all barcode types will be returned.
  *   
@@ -121,6 +140,11 @@ typedef enum {
  *  Resume scanning barcodes after using `pause`.
  */
 - (void)resume;
+
+/**
+ * called before initialization. Subclasses can override to set up related properties.
+ */
+- (void)barcodeSetUp;
 
 /**
  *  Called whenever a barcode is scanned. Subclasses should override.

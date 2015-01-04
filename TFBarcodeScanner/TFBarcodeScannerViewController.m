@@ -30,6 +30,7 @@
 
 
 #import "TFBarcodeScannerViewController.h"
+#import "TFBarcodeScannerOverlay.h"
 
 NSString* const TFBarcodeScannerDomain = @"TFBarcodeScannerDomain";
 static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
@@ -42,6 +43,7 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 @property (nonatomic) dispatch_queue_t outputQueue;
 @property (nonatomic) AVCaptureVideoPreviewLayer *previewLayer;
 @property (nonatomic) BOOL paused;
+@property(nonatomic, strong) IBOutlet TFBarcodeScannerOverlay *scannerOverlay;
 
 @end
 
@@ -50,6 +52,8 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self setUpDefaultValues];
+    [self barcodeSetUp];
     [self setUpPreview];
     [self setUpSession];
 }
@@ -75,7 +79,14 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 - (void)viewDidLayoutSubviews
 {
     [super viewDidLayoutSubviews];
-    self.previewLayer.frame = CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height);
+
+    CGSize size;
+    if (self.previewContainer == nil) {
+        size = self.view.frame.size;
+    } else {
+        size = self.previewContainer.frame.size;
+    }
+    self.previewLayer.frame = CGRectMake(0, 0, size.width, size.height);
 }
 
 - (void)didReceiveMemoryWarning
@@ -236,6 +247,11 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 
 #pragma mark - Overridable methods
 
+- (void)barcodeSetUp
+{
+    // Subclasses can override
+}
+
 - (void)barcodePreviewWillShowWithDuration:(CGFloat)duration
 {
     // Subclasses can override
@@ -264,19 +280,43 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
         return;
     
     NSMutableSet *barcodes = [NSMutableSet set];
-    
+    NSMutableArray *cornersArray = nil;
+    NSMutableArray *borderRectArray = nil;
+
     for(AVMetadataObject *metadataObject in metadataObjects) {
-        if([metadataObject isKindOfClass:[AVMetadataMachineReadableCodeObject class]]) {
-            AVMetadataMachineReadableCodeObject *barcodeMetadata = (AVMetadataMachineReadableCodeObject *)metadataObject;
-            TFBarcode *barcode = [[TFBarcode alloc] initWithAVMetadata:barcodeMetadata];
-            
-            if (self.barcodeTypes & TFBarcodeTypeUPCA)
-                [barcode convertToUPCAFromEAN13];
-            
-            [barcodes addObject:barcode];
+        if (![metadataObject isKindOfClass:[AVMetadataMachineReadableCodeObject class]]) {
+            continue;
+        }
+
+        AVMetadataObject *transformedMetadataObject =
+        [self.previewLayer transformedMetadataObjectForMetadataObject:metadataObject];
+        AVMetadataMachineReadableCodeObject *barcodeMetadata = (AVMetadataMachineReadableCodeObject *)transformedMetadataObject;
+
+        TFBarcode *barcode = [[TFBarcode alloc] initWithAVMetadata:barcodeMetadata];
+        
+        if (self.barcodeTypes & TFBarcodeTypeUPCA)
+            [barcode convertToUPCAFromEAN13];
+        
+        [barcodes addObject:barcode];
+
+        if ([barcodeMetadata respondsToSelector:@selector(corners)]) {
+            if (!cornersArray) {
+                cornersArray = [[NSMutableArray alloc] init];
+            }
+            [cornersArray addObject:barcodeMetadata.corners];
+        }
+        if ([barcodeMetadata respondsToSelector:@selector(bounds)]) {
+            if (!borderRectArray) {
+                borderRectArray = [[NSMutableArray alloc] init];
+            }
+            [borderRectArray
+             addObject:[NSValue valueWithCGRect:barcodeMetadata.bounds]];
         }
     }
-    
+
+    self.scannerOverlay.cornersArray = cornersArray ? [NSArray arrayWithArray:cornersArray] : nil;
+    self.scannerOverlay.borderRectArray = borderRectArray ? [NSArray arrayWithArray:borderRectArray] : nil;
+
     if (barcodes.count > 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self barcodeWasScanned:barcodes];
@@ -285,6 +325,10 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 }
 
 #pragma mark - Private
+
+- (void)setUpDefaultValues {
+    self.rectOfPreviewInterest = CGRectMake(0, 0, 1, 1);
+}
 
 - (AVCaptureDevice *)camera
 {
@@ -317,7 +361,7 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     
     if (!self.sessionQueue)
         self.sessionQueue = dispatch_queue_create("session", DISPATCH_QUEUE_SERIAL);
-    
+
     dispatch_async(self.sessionQueue, ^{
         NSError *error = nil;
         AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:self.camera error:&error];
@@ -330,7 +374,8 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
             [self.session addInput:input];
             
             AVCaptureMetadataOutput *output = [AVCaptureMetadataOutput new];
-            
+
+            output.rectOfInterest = self.rectOfPreviewInterest;
             if (![self.session canAddOutput:output]) {
                 [self notifyPreviewError:[NSError errorWithDomain:TFBarcodeScannerDomain code:TFBarcodeScannerBadOutput userInfo:@{NSLocalizedDescriptionKey:@"Could not initialize camera"}]];
             } else {
@@ -355,12 +400,20 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     self.previewLayer = [AVCaptureVideoPreviewLayer new];
     self.previewLayer.opacity = 0.0f;
     self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    [self.view.layer insertSublayer:self.previewLayer atIndex:0];
+
+    if (self.previewContainer == nil) {
+        self.previewContainer = self.view;
+    }
+    [self.previewContainer.layer insertSublayer:self.previewLayer atIndex:0];
+
+    self.scannerOverlay = [[TFBarcodeScannerOverlay alloc] initWithFrame:self.previewContainer.bounds];
+    [self.previewContainer addSubview:self.scannerOverlay];
+    [self.previewContainer bringSubviewToFront:self.scannerOverlay];
 }
 
 - (void)showPreviewAnimated
 {
-    self.previewLayer.connection.videoOrientation = (AVCaptureVideoOrientation)self.interfaceOrientation;
+    self.previewLayer.connection.videoOrientation = (AVCaptureVideoOrientation)self.preferredInterfaceOrientationForPresentation;
     [self barcodePreviewWillShowWithDuration:TFBarcodeScannerPreviewAnimationDuration];
     
     [UIView animateWithDuration:TFBarcodeScannerPreviewAnimationDuration animations:^{
