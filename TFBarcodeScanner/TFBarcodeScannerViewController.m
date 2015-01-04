@@ -430,6 +430,8 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     [UIView animateWithDuration:TFBarcodeScannerPreviewAnimationDuration animations:^{
         self.previewLayer.opacity = 0.0f;
         self.scannerOverlay.layer.opacity = 0.0f;
+        self.scannerOverlay.borderRectArray = nil;
+        self.scannerOverlay.cornersArray = nil;
     }];
 }
 
