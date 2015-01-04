@@ -407,6 +407,7 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     [self.previewContainer.layer insertSublayer:self.previewLayer atIndex:0];
 
     self.scannerOverlay = [[TFBarcodeScannerOverlay alloc] initWithFrame:self.previewContainer.bounds];
+    self.scannerOverlay.layer.opacity = 0.0f;
     [self.previewContainer addSubview:self.scannerOverlay];
     [self.previewContainer bringSubviewToFront:self.scannerOverlay];
 }
@@ -418,6 +419,7 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     
     [UIView animateWithDuration:TFBarcodeScannerPreviewAnimationDuration animations:^{
         self.previewLayer.opacity = 1.0f;
+        self.scannerOverlay.layer.opacity = 1.0f;
     }];
 }
 
@@ -427,6 +429,7 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
 
     [UIView animateWithDuration:TFBarcodeScannerPreviewAnimationDuration animations:^{
         self.previewLayer.opacity = 0.0f;
+        self.scannerOverlay.layer.opacity = 0.0f;
     }];
 }
 
