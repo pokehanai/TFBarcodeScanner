@@ -56,6 +56,14 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     [self barcodeSetUp];
     [self setUpPreview];
     [self setUpSession];
+
+    UIGestureRecognizer* gr = [[UITapGestureRecognizer alloc]
+                               initWithTarget:self action:@selector(didTapGesture:)];
+    if (self.previewContainer) {
+        [self.previewContainer addGestureRecognizer:gr];
+    } else {
+        [self.view addGestureRecognizer:gr];
+    }
 }
 
 - (void)viewDidAppear:(BOOL)animated
@@ -372,7 +380,28 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
             [self notifyPreviewError:[NSError errorWithDomain:TFBarcodeScannerDomain code:TFBarcodeScannerBadInput userInfo:@{NSLocalizedDescriptionKey:@"Could not initialize camera"}]];
         } else {
             [self.session addInput:input];
-            
+
+            [self configCamera:^{
+                if ([_camera isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus]) {
+                    _camera.focusMode = AVCaptureFocusModeContinuousAutoFocus;
+
+                } else if ([_camera isFocusModeSupported:AVCaptureFocusModeAutoFocus]) {
+                    _camera.focusMode = AVCaptureFocusModeAutoFocus;
+                }
+
+                if ([_camera isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
+                    _camera.exposureMode = AVCaptureExposureModeContinuousAutoExposure;
+                } else if ([_camera isExposureModeSupported:AVCaptureExposureModeAutoExpose]) {
+                    _camera.exposureMode = AVCaptureExposureModeAutoExpose;
+                }
+
+                if ([_camera isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance]) {
+                    _camera.whiteBalanceMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
+                } else if ([_camera isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeAutoWhiteBalance]) {
+                    _camera.whiteBalanceMode = AVCaptureWhiteBalanceModeAutoWhiteBalance;
+                }
+            }];
+
             AVCaptureMetadataOutput *output = [AVCaptureMetadataOutput new];
 
             output.rectOfInterest = self.rectOfPreviewInterest;
@@ -452,6 +481,36 @@ static const CGFloat TFBarcodeScannerPreviewAnimationDuration = 0.2f;
     dispatch_async(dispatch_get_main_queue(), ^{
         [self barcodePreviewError:error];
     });
+}
+
+
+- (void)setPoint:(CGPoint)p
+{
+    CGSize viewSize = self.previewLayer.bounds.size;
+    CGPoint pointOfInterest = CGPointMake(p.y / viewSize.height,
+                                          1.0 - p.x / viewSize.width);
+
+    AVCaptureDevice* videoCaptureDevice = self.camera;
+
+    NSError* error = nil;
+    if ([videoCaptureDevice lockForConfiguration:&error]) {
+        if ([videoCaptureDevice isFocusPointOfInterestSupported] &&
+            [videoCaptureDevice isFocusModeSupported:AVCaptureFocusModeAutoFocus]) {
+            videoCaptureDevice.focusPointOfInterest = pointOfInterest;
+            videoCaptureDevice.focusMode = AVCaptureFocusModeAutoFocus;
+        }
+
+        [videoCaptureDevice unlockForConfiguration];
+    } else {
+        NSLog(@"%s|[ERROR] %@", __PRETTY_FUNCTION__, error);
+    }
+
+}
+
+- (void)didTapGesture:(UITapGestureRecognizer*)tgr
+{
+    CGPoint p = [tgr locationInView:tgr.view];
+    [self setPoint:p];
 }
 
 @end
